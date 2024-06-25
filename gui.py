@@ -36,7 +36,7 @@ class TpxGui:
         self._app = qt.QApplication()
         self._window = TpxGuiMainWindow()
         self._image_thread = TpxImageRepeater(client, 1)
-        self._raw_data_thread = TpxRawDataPlotter(client, self.updateRawHist, 0.1)
+        self._raw_data_thread = TpxRawDataPlotter(client, self.updateRawHist, 0.1, client.getClusterServerPath())
 
     def run(self):
         threads = [
@@ -69,6 +69,7 @@ if __name__ == '__main__':
 
     client = TpxClient()
     client.initialize(MASK_CONFIG_FILE, THRESHOLD_CONFIG_FILE, TEST_CONFIG_FILE, DAC_CONFIG_FILE)
+    client.setClusterParameters(5, 40e-9, 50000)
 
     gui = TpxGui(client)
     gui.run()

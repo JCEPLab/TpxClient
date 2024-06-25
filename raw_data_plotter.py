@@ -3,11 +3,12 @@ import threading
 import zmq
 import struct
 import time
+import fast_histogram as fhist
 
 class TpxRawDataPlotter:
 
-    def __init__(self, client, update_hist_func, update_s):
-        self._server_path = client.getRawDataServerPath()
+    def __init__(self, client, update_hist_func, update_s, server_path):
+        self._server_path = server_path
         self._cancelled = False
         self._thread = None
         self._subscriber = None
@@ -44,7 +45,7 @@ class TpxRawDataPlotter:
     def histogramData(self, data):
         arr = np.array(struct.unpack('='+str(len(data))+'B', data)).astype(np.uint8)
         if len(arr) > 0:
-            new_hist, _, _ = np.histogram2d(arr[0::8], arr[1::8], bins=256, range=[[0, 256], [0, 256]])
+            new_hist = fhist.histogram2d(arr[6::8], arr[7::8], bins=256, range=[[0, 256], [0, 256]])
             self._hist += new_hist.astype(int)
 
     def updateExternalHist(self):

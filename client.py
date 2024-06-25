@@ -11,6 +11,7 @@ class ServerCommand:
 
     NOP = 0
 
+# Commands to control the Timepix
     GET_SOFTWARE_VERSION = 1
     GET_FIRMWARE_VERSION = 2
 
@@ -73,10 +74,19 @@ class ServerCommand:
 
     SET_SENSEDAC = 48
 
+# Commands to control the UDP server
     SET_UDP_PORT = 500
     SET_RAW_TPX3_PATH = 501
     GET_RAW_DATA_SERVER_PATH = 502
 
+# Commands to control the clustering server
+    GET_CLUSTER_SERVER_PATH = 600
+    SET_CLUSTER_SERVER_INPUT = 601
+    SET_CLUSTER_PARAMETERS = 602
+    FLUSH_CLUSTERS = 603
+
+# Error codes
+    INVALID_COMMAND_DATA = 993
     CANT_OPEN_FILE = 994
     THREAD_NOT_CONNECTED = 995
     THREAD_NOT_STARTED = 996
@@ -85,6 +95,7 @@ class ServerCommand:
     UNKNOWN_COMMAND = 999
 
 SERVER_ERROR_NAMES = {
+    ServerCommand.INVALID_COMMAND_DATA: "Invalid command data",
     ServerCommand.CANT_OPEN_FILE: "Cannot open the specified file",
     ServerCommand.THREAD_NOT_CONNECTED: "Thread is not connected",
     ServerCommand.THREAD_NOT_STARTED: "Thread has not been started",
@@ -261,8 +272,8 @@ class TpxClient:
         self._bias_voltage_calibration = [linfit.slope, linfit.intercept]
 
     def initialize(self, mask_image:str, thlAdj_image:str, test_img:str, dac_config:str):
-        self.resetModule()
-        print("Resetting SPIDR")
+        #self.resetModule()
+        #print("Resetting SPIDR")
         self.setHeaderFilter(eth_mask=0xCD0, cpu_mask=0xF39F)
         self.resetTimers()
         self.setPeriodAndPhase(0x8001d)
@@ -278,10 +289,13 @@ class TpxClient:
         print("Starting UDP server")
         self.startUdpServer()
 
+        print("Connecting clustering server to UDP server")
+        self.setClusterServerInputPath(self.getRawDataServerPath())
+
         config = TimepixGenConfig()
         config.opMode = OperationModes.TOA_AND_TOT
         config.polarity = PolarityModes.POSITIVE
-        config.grayCounter = GrayCounterModes.DISABLED
+        config.grayCounter = GrayCounterModes.ENABLED
         config.testPulse = TestPulseModes.DISABLED
         config.superPix = SuperPixModes.ENABLED
         config.timerOverflow = TimerOverflowModes.CYCLE
@@ -289,6 +303,8 @@ class TpxClient:
         config.testPulseGenerator = TestPulseGenerators.INTERNAL
         config.toaClock = ToAClockModes.PHASE_SHIFTED_GRAY
         self.setGenConfig(config)
+
+        self.setRegister(SpidrRegister.SPIDR_CPU2TPX_WR_I, 0)
 
         self.setToADecodersEnabled(True)
         print("Timepix client initialized.")
@@ -299,7 +315,7 @@ class TpxClient:
 
         self.startReadout()
 
-        self.setShutterParameters(exposure_s, exposure_s*1.05, 1)
+        self.setShutterParameters(exposure_s, exposure_s, 1)
 
         self.restartTimers()
         self.startAutoTrigger()
@@ -348,9 +364,13 @@ class TpxClient:
             data_buffer = struct.pack(format_str, data[0])
             command_buffer += data_buffer
         elif len(data) > 1:
-            format_str = '=' + str(len(data)) + fmt
-            data_buffer = struct.pack(format_str, *data)
-            command_buffer += data_buffer
+            try:
+                format_str = '=' + str(len(data)) + fmt
+                data_buffer = struct.pack(format_str, *data)
+                command_buffer += data_buffer
+            except struct.error as e:
+                print("Unable to unpack struct with size " + str(len(data)))
+                raise e
 
         self._command_sock.send(command_buffer)
 
@@ -724,3 +744,16 @@ class TpxClient:
     def getRawDataServerPath(self):
         response = self._send_req(ServerCommand.GET_RAW_DATA_SERVER_PATH)
         return response.decode('ascii').strip('\0')
+
+    def getClusterServerPath(self):
+        response = self._send_req(ServerCommand.GET_CLUSTER_SERVER_PATH)
+        return response.decode('ascii').strip('\0')
+
+    def setClusterServerInputPath(self, path:str):
+        self._send_req(ServerCommand.SET_CLUSTER_SERVER_INPUT, list((path + '\0').encode('ascii')))
+
+    def setClusterParameters(self, max_separation_xy, max_separation_t, max_t_sep):
+        self._send_req(ServerCommand.SET_CLUSTER_PARAMETERS, [int(max_separation_xy), int(max_separation_t / 1.5625e-9), int(max_t_sep)])
+
+    def flushRemainingClusters(self):
+        self._send_req(ServerCommand.FLUSH_CLUSTERS, [])
