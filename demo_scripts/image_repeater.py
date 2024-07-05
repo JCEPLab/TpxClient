@@ -29,7 +29,8 @@ class TpxImageRepeater:
         self._thread.join()
 
     def run(self):
+        self._client.restartTimers()
         while not self._cancelled:
-            self._client.takeSingleImage(self._exposure_s, "")
+            self._client.takeSingleImage(self._exposure_s, restart_timer=False, keep_existing_fname=True)
             if self._image_triggered_func is not None:
                 self._image_triggered_func()

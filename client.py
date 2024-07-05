@@ -78,12 +78,19 @@ class ServerCommand:
     SET_UDP_PORT = 500
     SET_RAW_TPX3_PATH = 501
     GET_RAW_DATA_SERVER_PATH = 502
+    RESET_TOA_ROLLOVER_COUNTER = 503
 
 # Commands to control the clustering server
     GET_CLUSTER_SERVER_PATH = 600
     SET_CLUSTER_SERVER_INPUT = 601
     SET_CLUSTER_PARAMETERS = 602
     FLUSH_CLUSTERS = 603
+    SET_CLUSTER_PATH = 604
+
+# Commands to control the histogramming server
+    GET_HISTOGRAM_SERVER_PATH = 700
+    SET_HISTOGRAM_SERVER_INPUT = 701
+    SET_HISTOGRAM_OUTPUT_PERIOD = 702
 
 # Error codes
     INVALID_COMMAND_DATA = 993
@@ -289,9 +296,6 @@ class TpxClient:
         print("Starting UDP server")
         self.startUdpServer()
 
-        print("Connecting clustering server to UDP server")
-        self.setClusterServerInputPath(self.getRawDataServerPath())
-
         config = TimepixGenConfig()
         config.opMode = OperationModes.TOA_AND_TOT
         config.polarity = PolarityModes.POSITIVE
@@ -309,15 +313,19 @@ class TpxClient:
         self.setToADecodersEnabled(True)
         print("Timepix client initialized.")
 
-    def takeSingleImage(self, exposure_s, fname=None):
-        if fname is not None:
-            self.setRawTpx3Path(fname)
+    def takeSingleImage(self, exposure_s, fname=None, keep_existing_fname=False, restart_timer=True):
+        if fname is None:
+            fname = ""
+
+        if not keep_existing_fname:
+            self.setRawTpx3SavePath(fname)
 
         self.startReadout()
 
         self.setShutterParameters(exposure_s, exposure_s, 1)
 
-        self.restartTimers()
+        if restart_timer:
+            self.restartTimers()
         self.startAutoTrigger()
 
         sleep(exposure_s)
@@ -496,8 +504,11 @@ class TpxClient:
 
         return self._unpack_int(data)[0]
 
-    def restartTimers(self):
+    def restartTimers(self, reset_rollover_counter=True):
         self._send_req(ServerCommand.RESTART_TIMERS)
+
+        if reset_rollover_counter: # this is almost always what you want
+            self.resetToaRolloverCounter()
 
     def resetTimers(self):
         self._send_req(ServerCommand.RESET_TIMERS)
@@ -738,12 +749,15 @@ class TpxClient:
             for dac in dacs:
                 self.setDac(dac_str_map[dac], dacs[dac])
 
-    def setRawTpx3Path(self, path:str):
+    def setRawTpx3SavePath(self, path:str):
         self._send_req(ServerCommand.SET_RAW_TPX3_PATH, list((path + '\0').encode('ascii')))
 
     def getRawDataServerPath(self):
         response = self._send_req(ServerCommand.GET_RAW_DATA_SERVER_PATH)
         return response.decode('ascii').strip('\0')
+
+    def resetToaRolloverCounter(self):
+        self._send_req(ServerCommand.RESET_TOA_ROLLOVER_COUNTER)
 
     def getClusterServerPath(self):
         response = self._send_req(ServerCommand.GET_CLUSTER_SERVER_PATH)
@@ -757,3 +771,16 @@ class TpxClient:
 
     def flushRemainingClusters(self):
         self._send_req(ServerCommand.FLUSH_CLUSTERS, [])
+
+    def setClusterSavePath(self, path:str):
+        self._send_req(ServerCommand.SET_CLUSTER_PATH, list((path + '\0').encode('ascii')))
+
+    def getHistogramServerPath(self):
+        response = self._send_req(ServerCommand.GET_HISTOGRAM_SERVER_PATH)
+        return response.decode('ascii').strip('\0')
+
+    def setHistogramServerInputPath(self, path:str):
+        self._send_req(ServerCommand.SET_HISTOGRAM_SERVER_INPUT, list((path + '\0').encode('ascii')))
+
+    def setHistogramOutputPeriod(self, period_ms:int):
+        self._send_req(ServerCommand.SET_HISTOGRAM_OUTPUT_PERIOD, [period_ms,])

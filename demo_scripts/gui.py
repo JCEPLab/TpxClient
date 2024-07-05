@@ -31,12 +31,14 @@ class TpxGuiMainWindow(qt.QMainWindow):
 
 class TpxGui:
 
-    def __init__(self, client):
+    def __init__(self, client, update_s=0.1):
         self._client = client
         self._app = qt.QApplication()
         self._window = TpxGuiMainWindow()
         self._image_thread = TpxImageRepeater(client, 1)
-        self._raw_data_thread = TpxRawDataPlotter(client, self.updateRawHist, 0.1, client.getClusterServerPath())
+        self._raw_data_thread = TpxRawDataPlotter(client, self.updateRawHist, update_s, client.getHistogramServerPath())
+
+        client.setHistogramOutputPeriod(int(update_s*1000))
 
     def run(self):
         threads = [
@@ -62,13 +64,28 @@ class TpxGui:
         self._window._tpxplot.draw()
 
 if __name__ == '__main__':
-    MASK_CONFIG_FILE = './config/maskBits.txt'
-    THRESHOLD_CONFIG_FILE = './config/thlAdj.txt'
-    TEST_CONFIG_FILE = './config/testBits.txt'
-    DAC_CONFIG_FILE = './config/dacConfig.json'
+    MASK_CONFIG_FILE = '../config/maskBits.txt'
+    THRESHOLD_CONFIG_FILE = '../config/thlAdj.txt'
+    TEST_CONFIG_FILE = '../config/testBits.txt'
+    DAC_CONFIG_FILE = '../config/dacConfig.json'
+
+    raw_data_output = "C:/Users/JCEP Upsilon/Desktop/test.raw"
+    clusters_output = "C:/Users/JCEP Upsilon/Desktop/test.clusters"
 
     client = TpxClient()
+    #client.resetModule()
     client.initialize(MASK_CONFIG_FILE, THRESHOLD_CONFIG_FILE, TEST_CONFIG_FILE, DAC_CONFIG_FILE)
+
+    print("Connecting clustering server to UDP server")
+    client.setClusterServerInputPath(client.getRawDataServerPath())
+
+    print("Setting save paths")
+    #client.setRawTpx3SavePath(raw_data_output)
+    #client.setClusterSavePath(clusters_output)
+
+    print("Connecting histogram server to clustering server")
+    client.setHistogramServerInputPath(client.getClusterServerPath())
+
     client.setClusterParameters(5, 40e-9, 50000)
 
     gui = TpxGui(client)
