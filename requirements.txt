@@ -3,3 +3,4 @@ numpy==2.0.0
 matplotlib==3.9.0
 pyzmq==26.0.3
 scipy==1.13.1
+fast_histogram==0.14

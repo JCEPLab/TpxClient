@@ -43,10 +43,11 @@ class TpxRawDataPlotter:
         self._subscriber.close()
 
     def histogramData(self, data):
-        arr = np.array(struct.unpack('='+str(len(data))+'B', data)).astype(np.uint8)
-        if len(arr) > 0:
-            new_hist = fhist.histogram2d(arr[6::8], arr[7::8], bins=256, range=[[0, 256], [0, 256]])
-            self._hist += new_hist.astype(int)
+        arr = np.array(struct.unpack('='+str(len(data)//2)+'H', data)).astype(np.uint16)
+        self._hist += np.reshape(arr, (256, 256))
+        #if len(arr) > 0:
+        #    new_hist = fhist.histogram2d(arr[6::8], arr[7::8], bins=256, range=[[0, 256], [0, 256]])
+        #    self._hist += new_hist.astype(int)
 
     def updateExternalHist(self):
         if (time.monotonic() - self._last_update_time) > self._update_time_s:
